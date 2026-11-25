@@ -8,8 +8,8 @@ async function authed(req,env){const t=(req.headers.get('authorization')||'').re
 const now=()=>new Date().toISOString();
 const cap=(v,n)=>String(v==null?'':v).slice(0,n);
 const TABLES={products:['name','category','brand','price','stock','description','image','active'],customers:['name','type','phone','email','city','area','org','notes'],orders:['customer_id','customer_name','items','total','status','notes'],requests:['status','notes']};
-let custReady=false;
-async function ensureCols(db){if(custReady)return;for(const c of['email','area','org']){try{await db.prepare('ALTER TABLE customers ADD COLUMN '+c+' TEXT').run()}catch(e){}}custReady=true}
+let custReady=false;let reqSz=false;
+async function ensureCols(db){if(custReady)return;if(!reqSz){try{await db.prepare('ALTER TABLE requests ADD COLUMN sizes TEXT').run()}catch(e){}reqSz=true}for(const c of['email','area','org']){try{await db.prepare('ALTER TABLE customers ADD COLUMN '+c+' TEXT').run()}catch(e){}}custReady=true}
 export default{async fetch(req,env){
  const u=new URL(req.url);const p=u.pathname;
  if(!p.startsWith('/api/'))return env.ASSETS.fetch(req);
@@ -17,7 +17,10 @@ export default{async fetch(req,env){
  try{
  if(p==='/api/products'&&req.method==='GET'){const r=await env.DB.prepare('SELECT id,name,category,brand,price,stock,description,image FROM products WHERE active=1 ORDER BY id DESC LIMIT 200').all();return J(r.results)}
  if(p==='/api/request'&&req.method==='POST'){const b=await req.json();if(!cap(b.name,100)||!cap(b.phone,30))return J({error:'missing'},400);
-  await env.DB.prepare('INSERT INTO requests(name,type,product,qty,phone,notes,status,created) VALUES(?,?,?,?,?,?,?,?)').bind(cap(b.name,100),cap(b.type,40),cap(b.product,80),cap(b.qty,20),cap(b.phone,30),cap(b.notes,500),'جديد',now()).run();return J({ok:true})}
+  const SZ=/^(plano|[+-]?\d{1,2}(\.\d{1,2})?)?$/i;const zs={};for(const e of['od','os'])for(const k of['sph','cyl','add']){const v=cap(b[e+'_'+k],12).trim();if(!SZ.test(v))return J({error:'sizes'},400);zs[e+'_'+k]=v}
+  const part=e=>['sph','cyl','add'].filter(k=>zs[e+'_'+k]).map(k=>k.toUpperCase()+' '+zs[e+'_'+k]).join(' ');const sizes=[part('od')?'OD: '+part('od'):'',part('os')?'OS: '+part('os'):''].filter(Boolean).join(' | ');
+  if(!reqSz){try{await env.DB.prepare('ALTER TABLE requests ADD COLUMN sizes TEXT').run()}catch(e){}reqSz=true}
+  await env.DB.prepare('INSERT INTO requests(name,type,product,qty,phone,notes,status,created,sizes) VALUES(?,?,?,?,?,?,?,?,?)').bind(cap(b.name,100),cap(b.type,40),cap(b.product,80),cap(b.qty,20),cap(b.phone,30),cap(b.notes,500),'جديد',now(),sizes).run();return J({ok:true})}
  if(p==='/api/login'&&req.method==='POST'){const b=await req.json();const ok=eq(cap(b.password,200),String(env.ADMIN_PASSWORD));if(!ok)return J({error:'bad'},401);const exp=String(Date.now()+12*3600e3);return J({token:exp+'.'+await sign(env,exp)})}
  if(!await authed(req,env))return J({error:'auth'},401);
  await ensureCols(env.DB);
