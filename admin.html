@@ -592,5 +592,29 @@ async function renderQ(m){const Q=await api('admin/acc/quotes');const L=Array.is
 const _rq=render;render=async function(keep){if(tab==='a_quote')return renderQ($('#m'));return _rq(keep)};
 })();
 
+;(function(){
+try{const En=Object.entries(T);En.forEach(([k])=>delete T[k]);En.forEach(([k,v])=>{T[k]=v;if(k==='dash')T.a_fu='لوحة المتابعة'});if(!T.a_fu)T.a_fu='لوحة المتابعة';const g=MGR.find(x=>x[1].includes('dash'));if(g&&!g[1].includes('a_fu'))g[1].push('a_fu')}catch(e){}
+async function renderFU(m){
+ const [E0,R0]=await Promise.all([api('admin/acc/entries'),api('admin/requests')]);
+ const E=(Array.isArray(E0)?E0:[]).filter(e=>e.type==='sale'&&(e.amount-e.paid-(e.adj||0))>0.005);
+ const rm=e=>Math.max(0,Math.round((e.amount-e.paid-(e.adj||0))*100)/100);
+ const td=Date.now();const C={};let tot=0;const ag=[0,0,0,0];
+ E.forEach(e=>{const n=e.party||'(بدون اسم)';const c=C[n]||(C[n]={n,cnt:0,b:0,old:'9999',ag:[0,0,0,0]});const r=rm(e);c.cnt++;c.b+=r;tot+=r;const d=String(e.date).slice(0,10);if(d<c.old)c.old=d;const days=Math.max(0,Math.floor((td-Date.parse(d+'T00:00:00Z'))/864e5));const i=days<=30?0:days<=60?1:days<=90?2:3;c.ag[i]+=r;ag[i]+=r});
+ const L=Object.values(C).sort((a,b)=>b.b-a.b);
+ const B=(Array.isArray(R0)?R0:[]).map(r=>{const x=r.type==='حجز كشف نظر'?(r.notes||'').match(/^موعد: (\d{4}-\d{2}-\d{2}) (\d\d:\d\d)/):null;return x?{r,d:x[1],t:x[2]}:null}).filter(Boolean);
+ const live=B.filter(x=>x.r.status!=='ملغي'&&x.r.status!=='مكتمل');const cl={};live.forEach(x=>{const k=x.d+' '+x.t;cl[k]=(cl[k]||0)+1});
+ const tdy=new Date(td+3*36e5).toISOString().slice(0,10);const wk=new Date(td+3*36e5+7*864e5).toISOString().slice(0,10);
+ const row=x=>`<tr><td>${esc(x.d)}</td><td dir="ltr">${esc(x.t)}</td><td>${esc(x.r.name)}</td><td dir="ltr">${esc(x.r.phone)}</td><td>${esc(x.r.status)}</td><td>${cl[x.d+' '+x.t]>1?'<b style="color:#b91c1c">تعارض ('+cl[x.d+' '+x.t]+')</b>':''}</td></tr>`;
+ const tbl=a=>a.length?'<div style="overflow:auto"><table><tr><th>التاريخ</th><th>الوقت</th><th>الاسم</th><th>الجوال</th><th>الحالة</th><th></th></tr>'+a.sort((p,q)=>(p.d+p.t).localeCompare(q.d+q.t)).map(row).join('')+'</table></div>':'<p>لا يوجد.</p>';
+ const today=live.filter(x=>x.d===tdy),next=live.filter(x=>x.d>tdy&&x.d<=wk),newer=live.filter(x=>x.r.status==='جديد'&&x.d>=tdy),late=live.filter(x=>x.d<tdy&&x.r.status==='جديد');
+ m.innerHTML=`<h4>التحصيلات التي لم تحصل</h4><div class="cards"><div class="c">إجمالي المستحق على العملاء<b>${money(tot)}</b></div><div class="c">عدد العملاء<b>${L.length}</b></div><div class="c">عدد الفواتير غير المسددة<b>${E.length}</b></div></div>`+
+ `<div class="cards">${['0-30 يوم','31-60 يوم','61-90 يوم','أكثر من 90 يوم'].map((l,i)=>`<div class="c">${l}<b>${money(ag[i])}</b></div>`).join('')}</div>`+
+ (L.length?`<div style="overflow:auto"><table><tr><th>العميل</th><th>فواتير</th><th>أقدم فاتورة</th><th>المستحق</th><th>0-30</th><th>31-60</th><th>61-90</th><th>+90</th></tr>${L.map(c=>`<tr><td>${esc(c.n)}</td><td>${c.cnt}</td><td>${esc(c.old)}</td><td><b>${money(c.b)}</b></td>${c.ag.map(x=>`<td>${x?money(x):''}</td>`).join('')}</tr>`).join('')}</table></div>`:'<p>لا توجد مبالغ غير محصلة.</p>')+
+ `<p><small>المصدر: فواتير المبيعات بعد المدفوع والمردودات (نفس حساب تبويب الذمم). العمر بحسب تاريخ الفاتورة (لا يوجد تاريخ استحقاق)، والفترات 30/60/90 يوم عرض افتراضي. للتفاصيل: الذمم وكشف الحساب.</small></p>`+
+ `<h4>مواعيد الكشف</h4><h5>اليوم (${tdy})</h5>${tbl(today)}<h5>خلال 7 أيام</h5>${tbl(next)}<h5>حجوزات جديدة بانتظار التأكيد</h5>${tbl(newer)}`+(late.length?`<h5 style="color:#b45309">مواعيد فاتت ولم تُؤكَّد أو تُغلق</h5>${tbl(late)}`:'')+`<p><small>المصدر: الحجوزات في تبويب «الطلبات الواردة». المستبعد: الملغي والمكتمل. التأكيد وتغيير الحالة من هناك.</small></p>`;
+}
+const _rf=render;render=async function(keep){if(tab==='a_fu')return renderFU($('#m'));return _rf(keep)};
+})();
+
 ;if('serviceWorker' in navigator)navigator.serviceWorker.register('/sw.js').catch(()=>{});
 </script></body></html>
