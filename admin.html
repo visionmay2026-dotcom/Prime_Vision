@@ -616,5 +616,19 @@ async function renderFU(m){
 const _rf=render;render=async function(keep){if(tab==='a_fu')return renderFU($('#m'));return _rf(keep)};
 })();
 
+;(function(){
+const XA={x_full:'نسخة كاملة (كل الجداول والمستندات)',x_json:'نسخة احتياطية JSON',x_csv:'تصدير CSV (4 ملفات)',x_nt:'تفعيل تنبيهات المتصفح'};
+try{Object.entries(XA).forEach(([k,v])=>{T[k]=v});MGR.push(['النسخ والتصدير',Object.keys(XA)])}catch(e){}
+const act=async k=>{
+ if(k==='x_full'){const b=document.createElement('button');b.id='fx';b.hidden=true;document.body.appendChild(b);b.click();setTimeout(()=>b.remove(),500);return}
+ if(k==='x_json'){dl('pv-backup.json',JSON.stringify(await api('admin/export'),null,1),'application/json');return}
+ if(k==='x_csv'){const d=await api('admin/export');for(const x of['products','customers','orders','requests'])dl('pv-'+x+'.csv',csv(d[x]),'text/csv');return}
+ if(k==='x_nt'){if(!('Notification' in window))return toast('المتصفح لا يدعم التنبيهات');if(Notification.permission==='granted')return toast('التنبيهات مفعّلة');if(Notification.permission==='denied')return toast('التنبيهات محظورة من إعدادات المتصفح');await Notification.requestPermission();toast(Notification.permission==='granted'?'تم تفعيل التنبيهات':'لم يتم التفعيل')}
+};
+document.addEventListener('click',e=>{const el=e.target&&e.target.closest&&e.target.closest('[data-k],[data-go]');if(!el)return;const k=el.dataset.k||el.dataset.go;if(!XA[k])return;e.stopImmediatePropagation();e.preventDefault();act(k).catch(()=>toast('تعذر التنفيذ'))},true);
+const _s2=start;start=function(k){_s2(k);['#ex','#ec','#fx','#nt'].forEach(s=>{const n=document.querySelector('#nav '+s);if(n)n.remove()})};
+setTimeout(()=>{['#ex','#ec','#fx','#nt'].forEach(s=>{const n=document.querySelector('#nav '+s);if(n)n.remove()})},0);
+})();
+
 ;if('serviceWorker' in navigator)navigator.serviceWorker.register('/sw.js').catch(()=>{});
 </script></body></html>
