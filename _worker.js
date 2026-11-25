@@ -57,6 +57,13 @@ async function accSetup(db){if(accReady)return;await db.batch([db.prepare('CREAT
 const VAT_RATE=17;const r2=x=>Math.round(x*100)/100;const dOk=d=>/^\d{4}-\d{2}-\d{2}$/.test(d)?d:now().slice(0,10);
 const taxLocked=async db=>{const x=await db.prepare("SELECT v FROM acc_set WHERE k='taxlock'").first();return !!x&&x.v==='1'};
 async function acc(req,env,p,u){const db=env.DB;await accSetup(db);const sub=p.slice('/api/admin/acc/'.length);
+ if(sub.startsWith('closings')){await db.prepare('CREATE TABLE IF NOT EXISTS acc_closings(id INTEGER PRIMARY KEY AUTOINCREMENT,date TEXT UNIQUE,opening REAL,receipts REAL,payments REAL,expected REAL,counted REAL,diff REAL,note TEXT,created TEXT)').run();
+  if(sub==='closings'&&req.method==='GET')return J((await db.prepare('SELECT * FROM acc_closings ORDER BY date DESC LIMIT 1000').all()).results);
+  if(sub==='closings'&&req.method==='POST'){const b=await req.json();if(!/^\d{4}-\d{2}-\d{2}$/.test(String(b.date)))return J({error:'date'},400);const n=['opening','receipts','payments','expected','counted'].map(k=>Number(b[k]));if(n.some(x=>!Number.isFinite(x)))return J({error:'num'},400);const [o,r,p,e,c]=n.map(r2);const d=r2(c-e);const note=cap(b.note,300);if(d!==0&&!String(note).trim())return J({error:'note_required'},400);
+   if(await db.prepare('SELECT id FROM acc_closings WHERE date=?').bind(b.date).first())return J({error:'exists'},409);
+   const x=await db.prepare('INSERT INTO acc_closings(date,opening,receipts,payments,expected,counted,diff,note,created) VALUES(?,?,?,?,?,?,?,?,?)').bind(b.date,o,r,p,e,c,d,note,now()).run();return J({id:x.meta.last_row_id,diff:d})}
+  const mc=sub.match(/^closings\/(\d+)$/);if(mc&&req.method==='DELETE'){await db.prepare('DELETE FROM acc_closings WHERE id=?').bind(Number(mc[1])).run();return J({ok:true})}
+  return J({error:'method'},405)}
  if(sub.startsWith('files')){await db.prepare('CREATE TABLE IF NOT EXISTS acc_files(id INTEGER PRIMARY KEY AUTOINCREMENT,ref_kind TEXT,ref_id INTEGER,name TEXT,mime TEXT,size INTEGER,note TEXT,data TEXT,created TEXT)').run();const FT={entry:'acc_entries',payment:'acc_payments',banktx:'acc_banktx',custx:'acc_custx',adj:'acc_adj'};
   if(sub==='files'&&req.method==='GET')return J((await db.prepare('SELECT id,ref_kind,ref_id,name,mime,size,note,created FROM acc_files ORDER BY id DESC LIMIT 2000').all()).results);
   if(sub==='files'&&req.method==='POST'){const b=await req.json();const k=String(b.ref_kind);if(k!=='other'&&!FT[k])return J({error:'kind'},400);const rid=k==='other'?0:Number(b.ref_id);if(k!=='other'){if(!rid)return J({error:'ref'},400);const ex=await db.prepare('SELECT id FROM '+FT[k]+' WHERE id=?').bind(rid).first();if(!ex)return J({error:'ref'},400)}
