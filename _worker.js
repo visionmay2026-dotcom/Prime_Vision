@@ -16,9 +16,11 @@ export default{async fetch(req,env){
  if(!env.DB||!env.ADMIN_PASSWORD)return J({error:'not configured'},503);
  try{
  if(p==='/api/products'&&req.method==='GET'){const r=await env.DB.prepare('SELECT id,name,category,brand,price,stock,description,image FROM products WHERE active=1 ORDER BY id DESC LIMIT 200').all();return J(r.results)}
+ if(p==='/api/lens-types'&&req.method==='GET'){try{return J((await env.DB.prepare('SELECT name FROM acc_lens_types ORDER BY id LIMIT 100').all()).results.map(x=>x.name))}catch(e){return J([])}}
  if(p==='/api/request'&&req.method==='POST'){const b=await req.json();if(!cap(b.name,100)||!cap(b.phone,30))return J({error:'missing'},400);
   const SZ=/^(plano|[+-]?\d{1,2}(\.\d{1,2})?)?$/i;const zs={};for(const e of['od','os'])for(const k of['sph','cyl','add']){const v=cap(b[e+'_'+k],12).trim();if(!SZ.test(v))return J({error:'sizes'},400);zs[e+'_'+k]=v}
-  const part=e=>['sph','cyl','add'].filter(k=>zs[e+'_'+k]).map(k=>k.toUpperCase()+' '+zs[e+'_'+k]).join(' ');const sizes=[part('od')?'OD: '+part('od'):'',part('os')?'OS: '+part('os'):''].filter(Boolean).join(' | ');
+  const SZL=/^(plano|[+-]?\d{1,2}(\.\d{1,2})?)?$/i;const lns=[];for(const l of(Array.isArray(b.lines)?b.lines:[]).slice(0,50)){const t=cap(l.type,60).trim(),s=cap(l.sph,12).trim(),c=cap(l.cyl,12).trim(),a=cap(l.add_v,12).trim(),q=Math.floor(Number(l.pairs));if(!t||!SZL.test(s)||!SZL.test(c)||!SZL.test(a)||!(q>0)||q>10000000)return J({error:'lines'},400);lns.push(t+(s?' SPH '+s:'')+(c?' CYL '+c:'')+(a?' ADD '+a:'')+' x '+q+' زوج')}
+  const part=e=>['sph','cyl','add'].filter(k=>zs[e+'_'+k]).map(k=>k.toUpperCase()+' '+zs[e+'_'+k]).join(' ');const sizes=[part('od')?'OD: '+part('od'):'',part('os')?'OS: '+part('os'):''].concat(lns.map(x=>'سطر: '+x)).filter(Boolean).join(' | ').slice(0,3000);
   if(!reqSz){try{await env.DB.prepare('ALTER TABLE requests ADD COLUMN sizes TEXT').run()}catch(e){}reqSz=true}
   await env.DB.prepare('INSERT INTO requests(name,type,product,qty,phone,notes,status,created,sizes) VALUES(?,?,?,?,?,?,?,?,?)').bind(cap(b.name,100),cap(b.type,40),cap(b.product,80),cap(b.qty,20),cap(b.phone,30),cap(b.notes,500),'جديد',now(),sizes).run();return J({ok:true})}
  if(p==='/api/login'&&req.method==='POST'){const b=await req.json();const ok=eq(cap(b.password,200),String(env.ADMIN_PASSWORD));if(!ok)return J({error:'bad'},401);const exp=String(Date.now()+12*3600e3);return J({token:exp+'.'+await sign(env,exp)})}
