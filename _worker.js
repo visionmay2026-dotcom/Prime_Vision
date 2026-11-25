@@ -54,6 +54,17 @@ async function acc(req,env,p,u){const db=env.DB;await accSetup(db);const sub=p.s
  const m=sub.match(/^entries\/(\d+)$/);if(m&&req.method==='DELETE'){const id=Number(m[1]);await db.batch([db.prepare('DELETE FROM acc_payments WHERE entry_id=?').bind(id),db.prepare('DELETE FROM acc_entries WHERE id=?').bind(id)]);return J({ok:true})}
 
 
+
+ // prescriptions (وصفات) and lens orders: text fields, no assumed values
+ const RXC=['customer_id', 'customer_name', 'date', 'od_dsph', 'od_dcyl', 'od_daxis', 'od_nsph', 'od_ncyl', 'od_naxis', 'od_add', 'os_dsph', 'os_dcyl', 'os_daxis', 'os_nsph', 'os_ncyl', 'os_naxis', 'os_add', 'pd', 'pd_od', 'pd_os', 'pd_near', 'notes'];const LOC=['customer_id', 'customer_name', 'rx_id', 'supplier', 'lens', 'status', 'ordered', 'expected', 'received', 'delivered', 'cost', 'notes'];
+ const LST=['جديد','أُرسل للمورد','وصل من المورد','سُلّم للعميل','ملغي'];
+ if(sub.startsWith('rx')||sub.startsWith('lens')){await db.batch([db.prepare('CREATE TABLE IF NOT EXISTS acc_rx(id INTEGER PRIMARY KEY AUTOINCREMENT,'+RXC.map(c=>c==='customer_id'?'customer_id INTEGER':c+' TEXT').join(',')+',created TEXT)'),db.prepare('CREATE TABLE IF NOT EXISTS acc_lens(id INTEGER PRIMARY KEY AUTOINCREMENT,'+LOC.map(c=>c==='customer_id'||c==='rx_id'?c+' INTEGER':c+' TEXT').join(',')+',created TEXT)')]);
+  const T2=sub.startsWith('rx')?'acc_rx':'acc_lens',C2=T2==='acc_rx'?RXC:LOC,s2=sub.replace(/^(rx|lens)/,'');const nv=(c,v)=>(c==='customer_id'||c==='rx_id')?(Number(v)||0):cap(v,c==='notes'||c==='lens'?500:60);
+  if(s2===''&&req.method==='GET')return J((await db.prepare('SELECT * FROM '+T2+' ORDER BY id DESC LIMIT 1000').all()).results);
+  if(s2===''&&req.method==='POST'){const b=await req.json();if(!cap(b.customer_name,100)&&!Number(b.customer_id))return J({error:'customer'},400);if(T2==='acc_lens'&&b.status&&!LST.includes(b.status))return J({error:'status'},400);const bb={...b};if(T2==='acc_rx'&&!bb.date)bb.date=now().slice(0,10);if(T2==='acc_lens'&&!bb.status)bb.status='جديد';if(T2==='acc_lens'&&!bb.ordered)bb.ordered=now().slice(0,10);const r=await db.prepare('INSERT INTO '+T2+'('+C2.join(',')+',created) VALUES('+C2.map(()=>'?').join(',')+',?)').bind(...C2.map(c=>c==='customer_name'?cap(bb[c],100):nv(c,bb[c])),now()).run();return J({id:r.meta.last_row_id})}
+  const m2=s2.match(/^\/(\d+)$/);if(m2&&req.method==='PUT'){const b=await req.json();if(T2==='acc_lens'&&'status' in b&&!LST.includes(b.status))return J({error:'status'},400);const sets=[],vals=[];for(const c of C2)if(c in b){sets.push(c+'=?');vals.push(c==='customer_name'?cap(b[c],100):nv(c,b[c]))}if(!sets.length)return J({error:'empty'},400);await db.prepare('UPDATE '+T2+' SET '+sets.join(',')+' WHERE id=?').bind(...vals,Number(m2[1])).run();return J({ok:true})}
+  if(m2&&req.method==='DELETE'){await db.prepare('DELETE FROM '+T2+' WHERE id=?').bind(Number(m2[1])).run();return J({ok:true})}
+  return J({error:'nf'},404)}
  // suppliers (same fields as customers)
  const SC=['name','phone','email','city','area','org','notes'];
  if(sub==='suppliers'&&req.method==='GET')return J((await db.prepare('SELECT * FROM acc_suppliers ORDER BY id DESC LIMIT 1000').all()).results);
