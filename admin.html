@@ -491,4 +491,12 @@ async function renderOpen(m){const [O,C,S]=await Promise.all([api('admin/acc/ope
  if($('#ocx'))$('#ocx').onclick=async()=>{if(!confirm('حذف رصيد الصندوق الافتتاحي؟'))return;await api('admin/acc/opening/cash',{method:'DELETE'});render()};
  document.querySelectorAll('[data-od]').forEach(b=>b.onclick=async()=>{if(!confirm('حذف هذا الرصيد الافتتاحي؟ أي دفعات مسجلة عليه ستحذف أيضا.'))return;await api('admin/acc/entries/'+b.dataset.od,{method:'DELETE'});render()})}
 })();
+
+;(function(){T.a_log='سجل التغييرات';
+const _r3=render;
+render=async function(keep){if(tab==='a_log')return renderLog($('#m'));return _r3(keep)};
+async function renderLog(m){const L=await api('admin/acc/log');const nm={products:'المنتجات',customers:'العملاء',orders:'الطلبات',requests:'الطلبات الواردة'};const mt={POST:'إضافة',PUT:'تعديل',DELETE:'حذف'};
+const rows=(Array.isArray(L)?L:[]).filter(r=>has(r,Q)).map(r=>`<tr><td dir="ltr">${esc((r.ts||'').replace('T',' ').slice(0,19))}</td><td>${esc(r.who)}</td><td>${esc(mt[r.method]||r.method)}</td><td dir="ltr">${esc(r.path)}</td><td dir="ltr"><small>${esc(r.new_val)}</small></td><td dir="ltr"><small>${esc(r.old_val)}</small></td></tr>`).join('');
+m.innerHTML=`<h4>سجل التغييرات</h4><p><small>يسجل كل تعديل ناجح (إضافة أو تعديل أو حذف) مع الوقت والمستخدم والقيمة الجديدة، والقيمة القديمة للمنتجات والعملاء والطلبات. حاليا المستخدم واحد (admin). الصور والكلمات السرية لا تُسجل. آخر 400 سجل معروضة، ويحتفظ النظام بآخر 5000 تقريبا. السجل داخل قاعدة البيانات فقط ولا يُرفع إلى GitHub.</small></p>${bar('بحث في السجل')}<div class="sc"><table><tr><th>الوقت (UTC)</th><th>المستخدم</th><th>العملية</th><th>المسار</th><th>القيمة الجديدة</th><th>القيمة القديمة</th></tr>${rows||'<tr><td colspan="6">لا توجد سجلات بعد.</td></tr>'}</table></div>`;hookBar()}
+})();
 </script></body></html>
