@@ -7,9 +7,9 @@ const eq=(a,b)=>{if(a.length!==b.length)return false;let r=0;for(let i=0;i<a.len
 async function authed(req,env){const t=(req.headers.get('authorization')||'').replace('Bearer ','');const [exp,sig]=t.split('.');if(!exp||!sig||+exp<Date.now())return false;return eq(sig,await sign(env,exp))}
 const now=()=>new Date().toISOString();
 const cap=(v,n)=>String(v==null?'':v).slice(0,n);
-const TABLES={products:['name','category','brand','price','stock','description','image','active'],customers:['name','type','phone','email','city','area','org','notes'],orders:['customer_id','customer_name','items','total','status','notes'],requests:['status','notes']};
+const TABLES={products:['name','category','brand','price','stock','description','image','active','power','colour'],customers:['name','type','phone','email','city','area','org','notes'],orders:['customer_id','customer_name','items','total','status','notes'],requests:['status','notes']};
 let custReady=false;let reqSz=false;
-async function ensureCols(db){if(custReady)return;if(!reqSz){try{await db.prepare('ALTER TABLE requests ADD COLUMN sizes TEXT').run()}catch(e){}reqSz=true}for(const c of['email','area','org']){try{await db.prepare('ALTER TABLE customers ADD COLUMN '+c+' TEXT').run()}catch(e){}}custReady=true}
+async function ensureCols(db){if(custReady)return;for(const c of['power','colour']){try{await db.prepare('ALTER TABLE products ADD COLUMN '+c+' TEXT').run()}catch(e){}}if(!reqSz){try{await db.prepare('ALTER TABLE requests ADD COLUMN sizes TEXT').run()}catch(e){}reqSz=true}for(const c of['email','area','org']){try{await db.prepare('ALTER TABLE customers ADD COLUMN '+c+' TEXT').run()}catch(e){}}custReady=true}
 export default{async fetch(req,env){
  const u=new URL(req.url);const p=u.pathname;
  if(!p.startsWith('/api/'))return env.ASSETS.fetch(req);
