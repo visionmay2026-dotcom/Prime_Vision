@@ -8,7 +8,7 @@ table{width:100%;border-collapse:collapse;background:#fff;border-radius:10px;ove
 <div id="login"><h3>لوحة التحكم</h3><input id="pw" type="password" placeholder="كلمة المرور"><button id="lb">دخول</button><small id="le" style="color:#a33"></small></div>
 <div id="app" hidden><header><b>Prime Vision · لوحة التحكم</b><button class="l" id="out">خروج</button></header><nav id="nav"></nav><main id="m"></main></div>
 <script>
-const T={dash:'الرئيسية',products:'المنتجات والمخزون',requests:'الطلبات الواردة',orders:'الطلبات',customers:'العملاء'};
+const T={dash:'الرئيسية',products:'المنتجات والمخزون',requests:'الطلبات الواردة',orders:'الطلبات',customers:'العملاء',a_sale:'المبيعات (محاسبة)',a_purchase:'المشتريات',a_expense:'المصروفات',a_debts:'الذمم',a_ledger:'دفتر النقد',a_report:'التقارير المالية'};
 const ST=['جديد','قيد المعالجة','تم التواصل','مكتمل','ملغي'];let tab='dash',Q='',SF='';
 const $=s=>document.querySelector(s);const esc=s=>String(s==null?'':s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
 const tok=()=>sessionStorage.pvt||'';
@@ -30,6 +30,7 @@ function hookBar(){const q=$('#q');q.oninput=()=>{Q=q.value;clearTimeout(hookBar
 const stSel=(id,cur)=>`<select data-id="${id}">${ST.map(s=>`<option ${s===cur?'selected':''}>${s}</option>`).join('')}</select>`;
 function put(path,body,msg){return api(path,{method:'PUT',body}).then(()=>toast(msg||'تم الحفظ'))}
 async function render(keep){const m=$('#m');
+if(tab.startsWith('a_'))return renderAcc(m);
 if(tab==='dash'){const [s,P,R]=await Promise.all([api('admin/stats'),api('admin/products'),api('admin/requests')]);const low=P.filter(p=>p.active&&p.stock<=3);
 m.innerHTML='<div class="cards">'+[['المنتجات',s.products],['مخزون منخفض',s.lowStock],['طلبات واردة جديدة',s.newRequests],['طلبات مفتوحة',s.openOrders],['العملاء',s.customers],['المبيعات المكتملة',money(s.sales)]].map(x=>`<div class="c">${x[0]}<b>${esc(x[1])}</b></div>`).join('')+'</div><h4>مخزون منخفض (3 أو أقل)</h4>'+(low.length?'<table>'+low.map(p=>`<tr class="low"><td>${esc(p.name)}</td><td>${p.stock}</td></tr>`).join('')+'</table>':'<p>لا يوجد.</p>')+'<h4>آخر الطلبات الواردة</h4>'+(R.length?'<table>'+R.slice(0,5).map(r=>`<tr><td>${esc(r.name)}</td><td>${esc(r.product)}</td><td>${esc(r.status)}</td><td>${dt(r.created)}</td></tr>`).join('')+'</table>':'<p>لا يوجد.</p>');return}
 if(tab==='products'){const L=await api('admin/products');
@@ -59,6 +60,27 @@ await api('admin/orders',{method:'POST',body:{customer_id:c?c.id:0,customer_name
 for(const l of lines){const cur=P.find(p=>p.id==l.id);await api('admin/products/'+l.id,{method:'PUT',body:{stock:Math.max(0,cur.stock-l.qty)}})}toast('تم حفظ الطلب');render()};
 document.querySelectorAll('select[data-id]').forEach(s=>s.onchange=()=>put('admin/orders/'+s.dataset.id,{status:s.value}));
 document.querySelectorAll('[data-del]').forEach(b=>b.onclick=async()=>{if(confirm('حذف؟')){await api('admin/orders/'+b.dataset.del,{method:'DELETE'});render(true)}})}}
+
+// ===== Accounting (separate section) =====
+const AT={sale:'مبيعات',purchase:'مشتريات',expense:'مصروفات'},PL={sale:'العميل',purchase:'المورد',expense:'البند/الجهة'};
+const today=()=>new Date().toISOString().slice(0,10);
+const rem=e=>Math.max(0,e.amount-e.paid);
+function accTable(rows){return `<div class="sc"><table><tr><th>التاريخ</th><th>الجهة</th><th>البيان</th><th>المبلغ</th><th>المدفوع</th><th>المتبقي</th><th></th></tr>${rows.map(e=>`<tr><td>${esc(e.date)}</td><td>${esc(e.party)}</td><td>${esc(e.description)}<br><small>${esc(e.method)}</small></td><td>${money(e.amount)}</td><td>${money(e.paid)}</td><td>${rem(e)>0?'<b>'+money(rem(e))+'</b>':'<span class="ok">مسدد</span>'}</td><td>${rem(e)>0?`<button class="l" data-pay="${e.id}">سداد</button> `:''}<button class="d" data-adel="${e.id}">حذف</button></td></tr>`).join('')}</table></div>`}
+function hookAcc(E){document.querySelectorAll('[data-pay]').forEach(b=>b.onclick=async()=>{const e=E.find(x=>x.id==b.dataset.pay);const v=prompt('مبلغ السداد (المتبقي '+rem(e)+' ج.س)',rem(e));if(v===null)return;const r=await api('admin/acc/pay',{method:'POST',body:{entry_id:e.id,amount:v,date:today()}});if(r.error)return toast('المبلغ غير صحيح');toast('تم تسجيل السداد');render(true)});
+document.querySelectorAll('[data-adel]').forEach(b=>b.onclick=async()=>{if(confirm('حذف القيد وسداداته؟')){await api('admin/acc/entries/'+b.dataset.adel,{method:'DELETE'});render(true)}})}
+async function renderAcc(m){const E=await api('admin/acc/entries');const type=tab.slice(2);
+if(AT[type]){const rows=E.filter(e=>e.type===type&&has(e,Q));
+m.innerHTML=`<h4>${AT[type]}</h4><div class="f" id="af"><input name="date" type="date" value="${today()}"><input name="party" placeholder="${PL[type]}"><input name="description" placeholder="البيان"><input name="amount" type="number" min="0" placeholder="المبلغ ج.س"><label><input type="checkbox" id="full" checked> مدفوع بالكامل</label><input name="paid" type="number" min="0" placeholder="المدفوع الآن (إن لم يكتمل)"><select name="method"><option>نقدي</option><option>تحويل بنكي</option><option>أخرى</option></select><input name="notes" placeholder="ملاحظات"><button id="add">حفظ</button></div>${bar('بحث')}${accTable(rows)}<p><small>هذا القسم منفصل عن المخزون: تسجيل بيع أو شراء هنا لا يغير كميات المخزون.</small></p>`;hookBar();
+$('#add').onclick=async()=>{const b={type};document.querySelectorAll('#af [name]').forEach(i=>b[i.name]=i.value);if(!(Number(b.amount)>0))return toast('اكتب مبلغا صحيحا');if($('#full').checked)b.paid=b.amount;await api('admin/acc/entries',{method:'POST',body:b});toast('تم الحفظ');render()};hookAcc(E);return}
+if(tab==='a_debts'){const R=E.filter(e=>e.type==='sale'&&rem(e)>0),P=E.filter(e=>e.type==='purchase'&&rem(e)>0);const sum=a=>a.reduce((s,e)=>s+rem(e),0);
+m.innerHTML=`<div class="cards"><div class="c">مستحق لنا (مدينون)<b>${money(sum(R))}</b></div><div class="c">مستحق علينا (دائنون)<b>${money(sum(P))}</b></div></div><h4>مدينون: مبيعات غير مسددة</h4>${R.length?accTable(R):'<p>لا يوجد.</p>'}<h4>دائنون: مشتريات غير مسددة</h4>${P.length?accTable(P):'<p>لا يوجد.</p>'}`;hookAcc(E);return}
+const Pm=await api('admin/acc/payments');
+if(tab==='a_ledger'){let bal=0;const rows=Pm.map(p=>{const inn=p.type==='sale';bal+=inn?p.amount:-p.amount;return `<tr><td>${esc(p.date)}</td><td>${AT[p.type]}</td><td>${esc(p.party)} ${esc(p.description)}</td><td>${inn?money(p.amount):''}</td><td>${inn?'':money(p.amount)}</td><td>${money(bal)}</td></tr>`}).reverse().join('');
+m.innerHTML=`<h4>دفتر النقد (حركة المدفوعات الفعلية)</h4><div class="sc"><table><tr><th>التاريخ</th><th>النوع</th><th>البيان</th><th>داخل</th><th>خارج</th><th>الرصيد</th></tr>${rows}</table></div><p><small>الرصيد = المقبوض من المبيعات ناقص المدفوع للمشتريات والمصروفات. لا يشمل رصيدا افتتاحيا.</small></p>`;return}
+if(tab==='a_report'){const P=await api('admin/products');const mo=Q||'';const inM=d=>!mo||String(d).startsWith(mo);const ent=E.filter(e=>inM(e.date)),pay=Pm.filter(p=>inM(p.date));const s=t=>ent.filter(e=>e.type===t).reduce((a,e)=>a+e.amount,0);const cin=pay.filter(p=>p.type==='sale').reduce((a,p)=>a+p.amount,0),cout=pay.filter(p=>p.type!=='sale').reduce((a,p)=>a+p.amount,0);
+const ar=ent.filter(e=>e.type==='sale').reduce((a,e)=>a+rem(e),0),ap=ent.filter(e=>e.type==='purchase').reduce((a,e)=>a+rem(e),0);const inv=P.filter(p=>p.active).reduce((a,p)=>a+(p.price||0)*p.stock,0);
+m.innerHTML=`<div class="bar"><input id="q" type="month" value="${esc(mo)}"><button class="l" id="rall">كل الفترات</button></div><div class="cards">${[['المبيعات',s('sale')],['المشتريات',s('purchase')],['المصروفات',s('expense')],['النتيجة (مبيعات - مشتريات - مصروفات)',s('sale')-s('purchase')-s('expense')],['مقبوض',cin],['مدفوع',cout],['صافي النقد',cin-cout],['مدينون',ar],['دائنون',ap],['قيمة المخزون بسعر البيع',inv]].map(x=>`<div class="c">${x[0]}<b>${money(x[1])}</b></div>`).join('')}</div><p><small>ملخص مبسط على أساس الاستحقاق: ليس قيدا مزدوجا ولا ضريبة. لا توجد تكلفة شراء للمنتجات، لذلك المخزون بسعر البيع وليس بالتكلفة. لم تفترض أي نسبة ضريبة.</small></p><button class="l" id="xa">تصدير المحاسبة CSV</button>`;
+$('#q').onchange=()=>{Q=$('#q').value;render(true)};$('#rall').onclick=()=>{Q='';render(true)};$('#xa').onclick=()=>{dl('pv-acc-entries.csv',csv(E),'text/csv');dl('pv-acc-payments.csv',csv(Pm),'text/csv')}}}
 function small(f){return new Promise(r=>{const i=new Image;i.onload=()=>{const k=Math.min(1,500/i.width),c=document.createElement('canvas');c.width=i.width*k;c.height=i.height*k;c.getContext('2d').drawImage(i,0,0,c.width,c.height);r(c.toDataURL('image/jpeg',.7))};i.src=URL.createObjectURL(f)})}
 if(tok())start();
 </script></body></html>
