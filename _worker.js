@@ -11,6 +11,19 @@ const TABLES={products:['name','category','brand','price','stock','description',
 let custReady=false;let reqSz=false;
 async function ensureCols(db){if(custReady)return;for(const c of['power','colour']){try{await db.prepare('ALTER TABLE products ADD COLUMN '+c+' TEXT').run()}catch(e){}}for(const c of['cost REAL','sku TEXT','barcode TEXT']){try{await db.prepare('ALTER TABLE products ADD COLUMN '+c).run()}catch(e){}}if(!reqSz){try{await db.prepare('ALTER TABLE requests ADD COLUMN sizes TEXT').run()}catch(e){}reqSz=true}for(const c of['email','area','org']){try{await db.prepare('ALTER TABLE customers ADD COLUMN '+c+' TEXT').run()}catch(e){}}custReady=true}
 export default{async fetch(req,env){
+ const u0=new URL(req.url);const adm=u0.pathname.startsWith('/api/admin/')&&req.method!=='GET'&&env.DB;let bt='',pre=null;
+ if(adm){try{bt=(await req.clone().text()).slice(0,100000);const mm=/^\/api\/admin\/(products|customers|orders|requests)\/(\d+)$/.exec(u0.pathname);if(mm&&(req.method==='PUT'||req.method==='DELETE'))pre=await env.DB.prepare('SELECT * FROM '+mm[1]+' WHERE id=?').bind(Number(mm[2])).first()}catch(e){}}
+ const res=await H(req,env);
+ if(adm&&res.status<400&&u0.pathname!=='/api/admin/acc/log'){try{await logChange(env.DB,req.method,u0.pathname,bt,pre)}catch(e){}}
+ return res}};
+const LOGSKIP=/^(image|data|password|shop_logo|token)$/;
+const slim=o=>{if(!o||typeof o!=='object')return o;const r={};for(const k of Object.keys(o)){if(LOGSKIP.test(k)){r[k]='(مخفي)';continue}let v=o[k];if(typeof v==='string'&&v.length>160)v=v.slice(0,160)+'...';else if(v&&typeof v==='object')v=JSON.stringify(v).slice(0,160);r[k]=v}return r};
+let logReady=false;
+async function logChange(db,method,path,bt,pre){if(!logReady){await db.batch([db.prepare('CREATE TABLE IF NOT EXISTS acc_log(id INTEGER PRIMARY KEY AUTOINCREMENT,ts TEXT,who TEXT,method TEXT,path TEXT,new_val TEXT,old_val TEXT)'),db.prepare('CREATE TABLE IF NOT EXISTS acc_users(id INTEGER PRIMARY KEY AUTOINCREMENT,name TEXT,role TEXT,perms TEXT,active INTEGER DEFAULT 1,created TEXT)')]);logReady=true}
+ let nv='';try{nv=JSON.stringify(slim(JSON.parse(bt)))}catch(e){nv=''}if(nv==='{}'||nv==='null')nv='';const ov=pre?JSON.stringify(slim(pre)):'';
+ const r=await db.prepare('INSERT INTO acc_log(ts,who,method,path,new_val,old_val) VALUES(?,?,?,?,?,?)').bind(now(),'admin',method,path.replace('/api/admin/','').slice(0,120),nv.slice(0,1500),ov.slice(0,1500)).run();
+ const id=r.meta.last_row_id;if(id%50===0)await db.prepare('DELETE FROM acc_log WHERE id<?').bind(id-5000).run()}
+async function H(req,env){
  const u=new URL(req.url);const p=u.pathname;
  if(!p.startsWith('/api/'))return env.ASSETS.fetch(req);
  if(!env.DB||!env.ADMIN_PASSWORD)return J({error:'not configured'},503);
@@ -19,6 +32,9 @@ export default{async fetch(req,env){
  if(p==='/api/public-settings'&&req.method==='GET'){try{const r=(await env.DB.prepare("SELECT k,v FROM acc_set WHERE k IN ('show_wholesale','show_frames')").all()).results;const o={wholesale:'1',frames:'1'};r.forEach(x=>{if(x.k==='show_wholesale')o.wholesale=x.v==='0'?'0':'1';if(x.k==='show_frames')o.frames=x.v==='0'?'0':'1'});return J(o)}catch(e){return J({wholesale:'1',frames:'1'})}}
  if(p==='/api/lens-types'&&req.method==='GET'){try{return J((await env.DB.prepare('SELECT name FROM acc_lens_types ORDER BY id LIMIT 100').all()).results.map(x=>x.name))}catch(e){return J([])}}
  if(p==='/api/request'&&req.method==='POST'){const b=await req.json();if(!cap(b.name,100)||!cap(b.phone,30))return J({error:'missing'},400);
+  if(cap(b.website,50))return J({ok:true});
+  if(!/^[+\d][\d\s()-]{5,28}$/.test(cap(b.phone,30).trim()))return J({error:'phone'},400);
+  {await env.DB.prepare('CREATE TABLE IF NOT EXISTS rl(k TEXT PRIMARY KEY,n INTEGER,t INTEGER)').run();const ip=req.headers.get('cf-connecting-ip')||'x';const hr=String(Math.floor(Date.now()/3600e3));const k=ip+':'+hr;await env.DB.prepare('INSERT INTO rl(k,n,t) VALUES(?,1,?) ON CONFLICT(k) DO UPDATE SET n=n+1').bind(k,Date.now()).run();const rr=await env.DB.prepare('SELECT n FROM rl WHERE k=?').bind(k).first();if(rr&&rr.n>8)return J({error:'rate'},429);if(Math.random()<0.02)await env.DB.prepare('DELETE FROM rl WHERE t<?').bind(Date.now()-7200e3).run()}
   const SZ=/^(plano|[+-]?\d{1,2}(\.\d{1,2})?)?$/i;const zs={};for(const e of['od','os'])for(const k of['sph','cyl','add']){const v=cap(b[e+'_'+k],12).trim();if(!SZ.test(v))return J({error:'sizes'},400);zs[e+'_'+k]=v}
   const SZL=/^(plano|[+-]?\d{1,2}(\.\d{1,2})?)?$/i;const lns=[];for(const l of(Array.isArray(b.lines)?b.lines:[]).slice(0,50)){const t=cap(l.type,60).trim(),s=cap(l.sph,12).trim(),c=cap(l.cyl,12).trim(),a=cap(l.add_v,12).trim(),q=Math.floor(Number(l.pairs));if(!t||!SZL.test(s)||!SZL.test(c)||!SZL.test(a)||!(q>0)||q>10000000)return J({error:'lines'},400);lns.push(t+(s?' SPH '+s:'')+(c?' CYL '+c:'')+(a?' ADD '+a:'')+' x '+q+' زوج')}
   const part=e=>['sph','cyl','add'].filter(k=>zs[e+'_'+k]).map(k=>k.toUpperCase()+' '+zs[e+'_'+k]).join(' ');const sizes=[part('od')?'OD: '+part('od'):'',part('os')?'OS: '+part('os'):''].concat(lns.map(x=>'سطر: '+x)).filter(Boolean).join(' | ').slice(0,3000);
@@ -47,7 +63,7 @@ export default{async fetch(req,env){
  if(req.method==='DELETE'&&id){await env.DB.prepare(`DELETE FROM ${t} WHERE id=?`).bind(Number(id)).run();return J({ok:true})}
  return J({error:'method'},405);
  }catch(e){return J({error:'server',detail:String(e.message||e).slice(0,200)},500)}
-}}
+}
 
 // Accounting module (separate section): simple entries + payments, no tax assumptions.
 let accReady=false;
@@ -57,6 +73,7 @@ async function accSetup(db){if(accReady)return;await db.batch([db.prepare('CREAT
 const VAT_RATE=17;const r2=x=>Math.round(x*100)/100;const dOk=d=>/^\d{4}-\d{2}-\d{2}$/.test(d)?d:now().slice(0,10);
 const taxLocked=async db=>{const x=await db.prepare("SELECT v FROM acc_set WHERE k='taxlock'").first();return !!x&&x.v==='1'};
 async function acc(req,env,p,u){const db=env.DB;await accSetup(db);const sub=p.slice('/api/admin/acc/'.length);
+ if(sub==='log'){await db.prepare('CREATE TABLE IF NOT EXISTS acc_log(id INTEGER PRIMARY KEY AUTOINCREMENT,ts TEXT,who TEXT,method TEXT,path TEXT,new_val TEXT,old_val TEXT)').run();return J((await db.prepare('SELECT * FROM acc_log ORDER BY id DESC LIMIT 400').all()).results)}
 
 
  if(sub.startsWith('opening')){const co=async()=>{const r=await db.prepare("SELECT v FROM acc_set WHERE k='cash_open'").first();try{return r?JSON.parse(r.v):null}catch(e){return null}};
