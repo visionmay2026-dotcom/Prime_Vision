@@ -26,6 +26,10 @@ export default{async fetch(req,env){
  if(p==='/api/login'&&req.method==='POST'){const b=await req.json();const ok=eq(cap(b.password,200),String(env.ADMIN_PASSWORD));if(!ok)return J({error:'bad'},401);const exp=String(Date.now()+12*3600e3);return J({token:exp+'.'+await sign(env,exp)})}
  if(!await authed(req,env))return J({error:'auth'},401);
  await ensureCols(env.DB);
+ if(p==='/api/admin/fullexport'&&req.method==='GET'){const tn=u.searchParams.get('table');const q=async s=>(await env.DB.prepare(s).all()).results;
+  if(!tn){const ts=await q("SELECT name,sql FROM sqlite_master WHERE type IN('table','index') AND name NOT LIKE 'sqlite_%' AND name NOT LIKE '_cf_%' AND sql IS NOT NULL ORDER BY type DESC,name");const out=[];for(const t of ts){if(t.sql.startsWith('CREATE TABLE'))out.push({name:t.name,sql:t.sql,count:(await env.DB.prepare('SELECT COUNT(*) n FROM "'+t.name.replace(/"/g,'')+'"').first()).n});else out.push({name:t.name,sql:t.sql,index:true})}return J({exported_at:now(),tables:out})}
+  if(!/^[A-Za-z0-9_]+$/.test(tn))return J({error:'table'},400);const off=Math.max(0,Number(u.searchParams.get('offset'))||0),lim=Math.min(500,Math.max(1,Number(u.searchParams.get('limit'))||200));
+  return J({rows:(await env.DB.prepare('SELECT * FROM "'+tn+'" ORDER BY rowid LIMIT ? OFFSET ?').bind(lim,off).all()).results})}
  const m=p.match(/^\/api\/admin\/(products|customers|orders|requests)(?:\/(\d+))?$/);
  if(p==='/api/admin/stats'){const q=async s=>(await env.DB.prepare(s).first()).n;return J({products:await q('SELECT COUNT(*) n FROM products'),lowStock:await q('SELECT COUNT(*) n FROM products WHERE stock<=3 AND active=1'),customers:await q('SELECT COUNT(*) n FROM customers'),newRequests:await q("SELECT COUNT(*) n FROM requests WHERE status='جديد'"),openOrders:await q("SELECT COUNT(*) n FROM orders WHERE status NOT IN ('مكتمل','ملغي')"),sales:await q("SELECT COALESCE(SUM(total),0) n FROM orders WHERE status='مكتمل'")})}
  if(p.startsWith('/api/admin/acc/'))return acc(req,env,p,u);
