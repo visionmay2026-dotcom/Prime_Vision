@@ -130,7 +130,7 @@ footer{background:var(--n);color:#fff;padding:32px 16px;font-size:.92rem}.fg{max
 // رقم واتساب بصيغة دولية بدون + (فارغ أثناء التجربة، فتظهر رسالة "قريباً")
 const WA_NUMBER="";
 // بصمة SHA-256 لرمز الدخول. فارغة = بدون شاشة رمز
-const ACCESS_HASH="bdcd68d062a078c965d9ef1f2b9fa1dc64ea6eafbb12d04260515e7e326ed412";
+const ACCESS_HASH="";
 const wa=t=>"https://wa.me/"+WA_NUMBER+(t?"?text="+encodeURIComponent(t):"");
 const toast=m=>{const t=document.getElementById("toast");t.textContent=m;t.style.display="block";clearTimeout(toast.h);toast.h=setTimeout(()=>t.style.display="none",2800)};
 document.querySelectorAll("[data-wa]").forEach(a=>{if(WA_NUMBER){a.href=wa(a.dataset.wa);a.target="_blank";a.rel="noopener"}else{a.href="#";a.addEventListener("click",e=>{e.preventDefault();toast("التواصل عبر واتساب قريباً")})}});
