@@ -110,7 +110,7 @@ section{content-visibility:auto;contain-intrinsic-size:auto 500px}
 <div class="fc"><span class="ti"><svg class="ic "><use href="#i-hand"/></svg></span><h3>نظّف يديك</h3><p>اغسل يديك وجففهما جيداً قبل لمس العدسة.</p></div><div class="fc"><span class="ti"><svg class="ic "><use href="#i-eye"/></svg></span><h3>افحص العدسة</h3><p>تأكد من سلامتها واتجاهها الصحيح قبل وضعها.</p></div><div class="fc"><span class="ti"><svg class="ic "><use href="#i-clock"/></svg></span><h3>التزم بالمدة</h3><p>لا تنم بالعدسات ولا تتجاوز مدة الاستخدام الموصى بها.</p></div><div class="fc"><span class="ti"><svg class="ic "><use href="#i-steth"/></svg></span><h3>راجع الطبيب</h3><p>عند أي احمرار أو ألم أو تشوش، أزل العدسة وراجع طبيباً.</p></div></div></div></section>
 
 <section class="alt" id="b2b"><div class="wrap"><div class="sh"><h2>من نخدم</h2></div><p class="sub">نخدم مختلف الجهات في القطاع الطبي ومجال العناية بالنظر</p><div class="grid">
-<div class="fc"><span class="ti"><svg class="ic "><use href="#i-user"/></svg></span><h3>أفراد</h3></div><div class="fc"><span class="ti"><svg class="ic "><use href="#i-store"/></svg></span><h3>مراكز النظارات</h3></div><div class="fc"><span class="ti"><svg class="ic "><use href="#i-hospital"/></svg></span><h3>المستشفيات</h3></div><div class="fc"><span class="ti"><svg class="ic "><use href="#i-tent"/></svg></span><h3>المخيمات الطبية</h3></div><div class="fc"><span class="ti"><svg class="ic "><use href="#i-steth"/></svg></span><h3>العيادات الطبية</h3></div></div></div></section>
+<div class="fc"><span class="ti"><svg class="ic "><use href="#i-user"/></svg></span><h3>أفراد</h3></div><div class="fc"><span class="ti"><svg class="ic "><use href="#i-store"/></svg></span><h3>مراكز النظارات</h3></div><div class="fc"><span class="ti"><svg class="ic "><use href="#i-hospital"/></svg></span><h3>المستشفيات</h3></div><div class="fc"><span class="ti"><svg class="ic "><use href="#i-tent"/></svg></span><h3>المخيمات الطبية</h3></div><div class="fc"><span class="ti"><svg class="ic "><use href="#i-steth"/></svg></span><h3>العيادات الطبية</h3></div></div><div style="text-align:center;margin-top:16px"><button type="button" class="btn" id="pvWb">اطلب جملة</button></div><form id="pvWf" hidden style="max-width:420px;margin:14px auto;display:grid;gap:10px"><label>الاسم / اسم المنشأة<input name="n" required maxlength="100"></label><label>نوع الجهة<select name="type"><option>فرد</option><option>مركز نظارات</option><option>مستشفى</option><option>مخيم طبي</option><option>عيادة</option><option>أخرى</option></select></label><label>رقم التواصل<input name="p" type="tel" inputmode="tel" required maxlength="30"></label><button class="btn" type="submit">إرسال الطلب</button><p class="note" id="pvWm" role="status"></p></form></div></section>
 
 <section id="quote"><div class="wrap"><div class="sh"><h2>أخبرنا باحتياجك</h2></div><p class="sub">عبّي البيانات وسنتواصل معك عند توفر المنتج المناسب</p>
 <form id="f">
@@ -199,6 +199,12 @@ const f=$("f");f.addEventListener("submit",()=>{const b=f.querySelector('button[
 if("IntersectionObserver" in window){const io=new IntersectionObserver(es=>es.forEach(e=>{if(e.isIntersecting){e.target.classList.add("in");io.unobserve(e.target)}}),{rootMargin:"0px 0px -8% 0px"});document.querySelectorAll("section").forEach(s=>{s.classList.add("rv");io.observe(s)})}
 })();
 
+
+(function(){var b=document.getElementById("pvWb"),f=document.getElementById("pvWf"),m=document.getElementById("pvWm");if(!b||!f)return;
+b.onclick=function(){f.hidden=!f.hidden;if(!f.hidden)f.style.display="grid"};
+f.onsubmit=async function(e){e.preventDefault();var v=f.elements;var ty=v.type.value;m.textContent="...";
+try{var r=await fetch("/api/request",{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify({name:v.n.value.trim(),type:ty,product:"طلب جملة",qty:"",phone:v.p.value.trim(),notes:"طلب جملة (نموذج مختصر)"})});
+m.textContent=r.ok?"تم استلام طلبك، سنتواصل معك":"تعذر الإرسال الآن، حاول لاحقاً";if(r.ok)f.reset()}catch(x){m.textContent="تعذر الإرسال الآن، حاول لاحقاً"}}})();
 (function(){const SEL='select[name=type],select[name=prod]';
 function fix(){document.querySelectorAll(SEL).forEach(s=>{if(s.dataset.oth)return;s.dataset.oth='1';let o=[...s.options].find(x=>x.textContent.trim()==='أخرى');if(!o){o=document.createElement('option');o.textContent='أخرى';s.appendChild(o)}
 const cur=s.value;const i=document.createElement('input');i.placeholder='اكتب الخيار';i.style.display='none';i.maxLength=60;s.after(i);
@@ -208,7 +214,7 @@ s.addEventListener('change',e=>{if(e.isTrusted===false&&e.detail==='oth')return;
 i.addEventListener('change',()=>{sync();const ev=new CustomEvent('change',{bubbles:true,detail:'oth'});s.dispatchEvent(ev)})})}
 new MutationObserver(()=>{clearTimeout(window.__ot);window.__ot=setTimeout(fix,50)}).observe(document.body,{childList:true,subtree:true});fix()})();
 
-(function(){const D={
+(function(){const D={'اطلب جملة':'Request wholesale','رقم التواصل':'Contact phone','إرسال الطلب':'Send request','تم استلام طلبك، سنتواصل معك':'Your request was received. We will contact you.','تعذر الإرسال الآن، حاول لاحقاً':'Could not send right now, please try later','الاسم / اسم المنشأة':'Name / business name',
 'ابحث: نظارة طبية، عدسات ملونة...':'Search: prescription glasses, coloured lenses...','بحث':'Search','رمز الدخول':'Access code','فريم طبي معدني أسود':'Black metal prescription frame','واتساب':'WhatsApp',
 'علامة سودانية جديدة للنظارات والعدسات، نخدم الأفراد والمنشآت: مراكز النظارات والمستشفيات والعيادات والمخيمات الطبية. سجّل اهتمامك عبر النموذج وسنتواصل معك عند توفر المنتج المناسب.':'A new Sudanese brand for eyewear and lenses, serving individuals and businesses: optical centres, hospitals, clinics and medical camps. Register your interest through the form and we will contact you when the right product is available.',
 '© 2026 Prime Vision — السودان':'© 2026 Prime Vision, Sudan','أخبرنا باحتياجك وسنتواصل عند توفر المنتج المناسب.':'Tell us what you need and we will contact you when the right product is available.','أخبرنا باحتياجك':'Tell us what you need','أخرى':'Other',
