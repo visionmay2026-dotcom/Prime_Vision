@@ -7,9 +7,9 @@ const eq=(a,b)=>{if(a.length!==b.length)return false;let r=0;for(let i=0;i<a.len
 async function authed(req,env){const t=(req.headers.get('authorization')||'').replace('Bearer ','');const [exp,sig]=t.split('.');if(!exp||!sig||+exp<Date.now())return false;return eq(sig,await sign(env,exp))}
 const now=()=>new Date().toISOString();
 const cap=(v,n)=>String(v==null?'':v).slice(0,n);
-const TABLES={products:['name','category','brand','price','stock','description','image','active','power','colour'],customers:['name','type','phone','email','city','area','org','notes'],orders:['customer_id','customer_name','items','total','status','notes'],requests:['status','notes']};
+const TABLES={products:['name','category','brand','price','stock','description','image','active','power','colour','cost','sku','barcode'],customers:['name','type','phone','email','city','area','org','notes'],orders:['customer_id','customer_name','items','total','status','notes'],requests:['status','notes']};
 let custReady=false;let reqSz=false;
-async function ensureCols(db){if(custReady)return;for(const c of['power','colour']){try{await db.prepare('ALTER TABLE products ADD COLUMN '+c+' TEXT').run()}catch(e){}}if(!reqSz){try{await db.prepare('ALTER TABLE requests ADD COLUMN sizes TEXT').run()}catch(e){}reqSz=true}for(const c of['email','area','org']){try{await db.prepare('ALTER TABLE customers ADD COLUMN '+c+' TEXT').run()}catch(e){}}custReady=true}
+async function ensureCols(db){if(custReady)return;for(const c of['power','colour']){try{await db.prepare('ALTER TABLE products ADD COLUMN '+c+' TEXT').run()}catch(e){}}for(const c of['cost REAL','sku TEXT','barcode TEXT']){try{await db.prepare('ALTER TABLE products ADD COLUMN '+c).run()}catch(e){}}if(!reqSz){try{await db.prepare('ALTER TABLE requests ADD COLUMN sizes TEXT').run()}catch(e){}reqSz=true}for(const c of['email','area','org']){try{await db.prepare('ALTER TABLE customers ADD COLUMN '+c+' TEXT').run()}catch(e){}}custReady=true}
 export default{async fetch(req,env){
  const u=new URL(req.url);const p=u.pathname;
  if(!p.startsWith('/api/'))return env.ASSETS.fetch(req);
@@ -40,9 +40,9 @@ export default{async fetch(req,env){
  if(!m)return J({error:'nf'},404);
  const t=m[1],id=m[2],cols=TABLES[t];
  if(req.method==='GET'&&!id){const r=await env.DB.prepare('SELECT * FROM '+t+' ORDER BY id DESC LIMIT 500').all();return J(r.results)}
- if(req.method==='POST'&&!id&&t!=='requests'){const b=await req.json();const vals=cols.map(c=>c==='price'||c==='total'||c==='stock'||c==='active'||c==='customer_id'?Number(b[c]??(c==='active'?1:0)):(c==='status'&&!b[c]?'جديد':cap(b[c],c==='items'||c==='description'||c==='image'?(c==='image'?600000:4000):300)));
+ if(req.method==='POST'&&!id&&t!=='requests'){const b=await req.json();const vals=cols.map(c=>c==='price'||c==='cost'||c==='total'||c==='stock'||c==='active'||c==='customer_id'?Number(b[c]??(c==='active'?1:0)):(c==='status'&&!b[c]?'جديد':cap(b[c],c==='items'||c==='description'||c==='image'?(c==='image'?600000:4000):300)));
   const extra=t==='products'?['updated']:['created'];const r=await env.DB.prepare(`INSERT INTO ${t}(${cols.concat(extra).join(',')}) VALUES(${cols.concat(extra).map(()=>'?').join(',')})`).bind(...vals,now()).run();return J({id:r.meta.last_row_id})}
- if(req.method==='PUT'&&id){const b=await req.json();const sets=[],vals=[];for(const c of cols)if(c in b){sets.push(c+'=?');vals.push(c==='price'||c==='total'||c==='stock'||c==='active'||c==='customer_id'?Number(b[c]):cap(b[c],c==='image'?600000:4000))}
+ if(req.method==='PUT'&&id){const b=await req.json();const sets=[],vals=[];for(const c of cols)if(c in b){sets.push(c+'=?');vals.push(c==='price'||c==='cost'||c==='total'||c==='stock'||c==='active'||c==='customer_id'?Number(b[c]):cap(b[c],c==='image'?600000:4000))}
   if(!sets.length)return J({error:'empty'},400);if(t==='products'){sets.push('updated=?');vals.push(now())}await env.DB.prepare(`UPDATE ${t} SET ${sets.join(',')} WHERE id=?`).bind(...vals,Number(id)).run();return J({ok:true})}
  if(req.method==='DELETE'&&id){await env.DB.prepare(`DELETE FROM ${t} WHERE id=?`).bind(Number(id)).run();return J({ok:true})}
  return J({error:'method'},405);
@@ -57,6 +57,12 @@ async function accSetup(db){if(accReady)return;await db.batch([db.prepare('CREAT
 const VAT_RATE=17;const r2=x=>Math.round(x*100)/100;const dOk=d=>/^\d{4}-\d{2}-\d{2}$/.test(d)?d:now().slice(0,10);
 const taxLocked=async db=>{const x=await db.prepare("SELECT v FROM acc_set WHERE k='taxlock'").first();return !!x&&x.v==='1'};
 async function acc(req,env,p,u){const db=env.DB;await accSetup(db);const sub=p.slice('/api/admin/acc/'.length);
+
+ if(sub==='shop'||sub==='backupmark'){await db.prepare('CREATE TABLE IF NOT EXISTS acc_set(k TEXT PRIMARY KEY,v TEXT)').run();const KS=sub==='shop'?['shop_name','shop_logo','shop_extra']:['last_backup'];
+  if(req.method==='GET'){const o={};for(const k of KS){const r=await db.prepare('SELECT v FROM acc_set WHERE k=?').bind(k).first();o[k]=r?r.v:''}return J(o)}
+  if(req.method==='POST'){if(sub==='backupmark'){await db.prepare('INSERT OR REPLACE INTO acc_set(k,v) VALUES(?,?)').bind('last_backup',now()).run();return J({ok:true})}
+   const b=await req.json();for(const k of KS){if(k in b){const v=String(b[k]==null?'':b[k]);if(k==='shop_logo'&&v&&!/^data:image\/(png|jpeg|webp);base64,/.test(v))return J({error:'logo'},400);if(v.length>(k==='shop_logo'?300000:300))return J({error:'size'},413);await db.prepare('INSERT OR REPLACE INTO acc_set(k,v) VALUES(?,?)').bind(k,v).run()}}return J({ok:true})}
+  return J({error:'method'},405)}
  if(sub.startsWith('closings')){await db.prepare('CREATE TABLE IF NOT EXISTS acc_closings(id INTEGER PRIMARY KEY AUTOINCREMENT,date TEXT UNIQUE,opening REAL,receipts REAL,payments REAL,expected REAL,counted REAL,diff REAL,note TEXT,created TEXT)').run();
   if(sub==='closings'&&req.method==='GET')return J((await db.prepare('SELECT * FROM acc_closings ORDER BY date DESC LIMIT 1000').all()).results);
   if(sub==='closings'&&req.method==='POST'){const b=await req.json();if(!/^\d{4}-\d{2}-\d{2}$/.test(String(b.date)))return J({error:'date'},400);const n=['opening','receipts','payments','expected','counted'].map(k=>Number(b[k]));if(n.some(x=>!Number.isFinite(x)))return J({error:'num'},400);const [o,r,p,e,c]=n.map(r2);const d=r2(c-e);const note=cap(b.note,300);if(d!==0&&!String(note).trim())return J({error:'note_required'},400);
