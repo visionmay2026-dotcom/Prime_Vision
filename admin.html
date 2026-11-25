@@ -24,7 +24,7 @@ $('#lb').onclick=async()=>{const r=await api('login',{method:'POST',body:{passwo
 $('#pw').onkeydown=e=>{if(e.key==='Enter')$('#lb').click()};$('#out').onclick=()=>{sessionStorage.pvt='';location.reload()};
 function dl(name,text,type){const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([text],{type}));a.download=name;a.click()}
 function csv(rows){if(!rows.length)return'';const k=Object.keys(rows[0]).filter(x=>x!=='image');return '\ufeff'+[k.join(',')].concat(rows.map(r=>k.map(c=>'"'+String(r[c]==null?'':r[c]).replace(/"/g,'""')+'"').join(','))).join('\n')}
-function start(){$('#login').hidden=true;$('#app').hidden=false;$('#nav').innerHTML=Object.entries(T).map(([k,v])=>`<button class="${k===tab?'on':'l'}" data-k="${k}">${v}</button>`).join('')+'<button class="l" id="ex">نسخة احتياطية JSON</button><button class="l" id="ec">تصدير CSV</button>';
+function start(){$('#login').hidden=true;$('#app').hidden=false;$('#nav').innerHTML=Object.entries(T).map(([k,v])=>`<button class="${k===tab?'on':'l'}" data-k="${k}">${v}</button>`).join('')+'<button class="l" id="ex">نسخة احتياطية JSON</button><button class="l" id="ec">تصدير CSV</button><button class="l" id="fx">نسخة كاملة (كل الجداول والمستندات)</button>';
 document.querySelectorAll('#nav [data-k]').forEach(b=>b.onclick=()=>{tab=b.dataset.k;Q='';SF='';CF='';start()});
 $('#ex').onclick=async()=>{dl('pv-backup.json',JSON.stringify(await api('admin/export'),null,1),'application/json')};
 $('#ec').onclick=async()=>{const d=await api('admin/export');for(const k of['products','customers','orders','requests'])dl('pv-'+k+'.csv',csv(d[k]),'text/csv')};render()}
@@ -319,4 +319,7 @@ function applyBadge(){const b=document.querySelector('#nav [data-k=requests]');i
 async function pollNew(){if(!tok())return;try{const s=await api('admin/stats');if(!s||s.newRequests==null)return;NR=s.newRequests;if(NRlast!==null&&NR>NRlast){beep();toast('طلب جديد وصل');try{if('Notification' in window&&Notification.permission==='granted')new Notification('Prime Vision',{body:'طلب جديد وصل'})}catch(e){}}NRlast=NR;applyBadge()}catch(e){}}
 const _start=start;start=function(){_start();applyBadge()};
 setInterval(pollNew,60000);if(tok())pollNew();
+
+document.addEventListener('click',async e=>{if(!e.target||e.target.id!=='fx')return;e.target.disabled=true;try{const meta=await api('admin/fullexport');const out={format:'pv-full-1',exported_at:meta.exported_at,schema:meta.tables.map(t=>({name:t.name,sql:t.sql,index:!!t.index})),data:{}};for(const t of meta.tables.filter(t=>!t.index)){out.data[t.name]=[];const step=t.name==='acc_docs'?3:200;for(let o=0;o<t.count;o+=step){const r=await api('admin/fullexport?table='+t.name+'&offset='+o+'&limit='+step);out.data[t.name].push(...r.rows)}}
+dl('pv-full-backup-'+new Date().toISOString().slice(0,10)+'.json',JSON.stringify(out),'application/json');toast('تم تنزيل النسخة الكاملة. احفظها في مكان خاص وليس في GitHub')}catch(x){toast('تعذر التصدير')}e.target.disabled=false});
 </script></body></html>
