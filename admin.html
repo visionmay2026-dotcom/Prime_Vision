@@ -312,4 +312,11 @@ document.querySelectorAll('[data-v]').forEach(b=>b.onclick=()=>open1(b.dataset.v
 document.querySelectorAll('[data-x]').forEach(b=>b.onclick=async()=>{if(confirm('حذف المستند؟')){await api('admin/acc/docs/'+b.dataset.x,{method:'DELETE'});render(true)}})}
 function small(f){return new Promise(r=>{const i=new Image;i.onload=()=>{const k=Math.min(1,500/i.width),c=document.createElement('canvas');c.width=i.width*k;c.height=i.height*k;c.getContext('2d').drawImage(i,0,0,c.width,c.height);r(c.toDataURL('image/jpeg',.7))};i.src=URL.createObjectURL(f)})}
 if(tok())start();
+
+let NR=0,NRlast=null;
+function beep(){try{const c=new (window.AudioContext||window.webkitAudioContext)(),o=c.createOscillator(),g=c.createGain();o.connect(g);g.connect(c.destination);o.frequency.value=880;g.gain.value=.15;o.start();setTimeout(()=>{o.stop();c.close()},350)}catch(e){}}
+function applyBadge(){const b=document.querySelector('#nav [data-k=requests]');if(b&&!b.dataset.base)b.dataset.base=b.textContent;if(b)b.textContent=b.dataset.base+(NR?' ('+NR+')':'');document.title=(NR?'('+NR+') ':'')+'Prime Vision';const nv=document.querySelector('#nav');if(nv&&!document.querySelector('#nt')&&'Notification' in window&&Notification.permission==='default'){const x=document.createElement('button');x.className='l';x.id='nt';x.textContent='تفعيل تنبيهات المتصفح';x.onclick=()=>Notification.requestPermission().then(()=>x.remove());nv.appendChild(x)}}
+async function pollNew(){if(!tok())return;try{const s=await api('admin/stats');if(!s||s.newRequests==null)return;NR=s.newRequests;if(NRlast!==null&&NR>NRlast){beep();toast('طلب جديد وصل');try{if('Notification' in window&&Notification.permission==='granted')new Notification('Prime Vision',{body:'طلب جديد وصل'})}catch(e){}}NRlast=NR;applyBadge()}catch(e){}}
+const _start=start;start=function(){_start();applyBadge()};
+setInterval(pollNew,60000);if(tok())pollNew();
 </script></body></html>
